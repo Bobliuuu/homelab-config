@@ -1,0 +1,212 @@
+services:
+  # --- VPN (PIA) ---
+  # Only starts when you run: podman compose --profile vpn up -d
+  gluetun:
+    image: docker.io/qmcgaw/gluetun:latest
+    container_name: gluetun
+    profiles: ["vpn"]
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    environment:
+      - VPN_SERVICE_PROVIDER=private internet access
+      - VPN_TYPE=openvpn
+      - OPENVPN_USER=${PIA_OPENVPN_USER}
+      - OPENVPN_PASSWORD=${PIA_OPENVPN_PASSWORD}
+      - SERVER_REGIONS=${PIA_REGION}
+      - TZ=${TZ}
+      #- DNS_SERVER=off
+      #- DNS_KEEP_NAMESERVER=off
+      #- DNS_ADDRESS=1.1.1.1
+      - OPENVPN_IPV6=off
+    ports:
+      - "8080:8080"   # qBittorrent Web UI
+      - "6881:6881"
+      - "6881:6881/udp"
+      - "9696:9696"
+    volumes:
+      - /home/jerry/media/config/gluetun:/gluetun
+    restart: unless-stopped
+    networks: [arr-net]
+
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    container_name: qbittorrent
+    profiles: ["vpn"]
+    depends_on:
+      - gluetun
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Toronto
+      - WEBUI_PORT=8080
+    volumes:
+      - /home/jerry/media/config/qbittorrent:/config
+      - /home/jerry/media/downloads:/downloads
+    restart: unless-stopped
+    network_mode: "container:gluetun"
+
+  # --- Arr apps (start normally) ---
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:latest
+    container_name: prowlarr
+    profiles: ["vpn"]
+    depends_on:
+      - gluetun
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Toronto
+    volumes:
+      - /home/jerry/media/config/prowlarr:/config
+    restart: unless-stopped
+    network_mode: "container:gluetun"
+  
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    container_name: radarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Toronto
+    volumes:
+      - /home/jerry/media/config/radarr:/config
+      - /home/jerry/media/movies:/movies
+      - /home/jerry/media/downloads:/downloads
+    ports:
+      - "7878:7878"
+    restart: unless-stopped
+    networks: [arr-net]
+
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:latest
+    container_name: sonarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Toronto
+    volumes:
+      - /home/jerry/media/config/sonarr:/config
+      - /home/jerry/media/tv:/tv
+      - /home/jerry/media/downloads:/downloads
+    ports:
+      - "8989:8989"
+    restart: unless-stopped
+    networks: [arr-net]
+
+  bazarr:
+    image: lscr.io/linuxserver/bazarr:latest
+    container_name: bazarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Toronto
+    volumes:
+      - /home/jerry/media/config/bazarr:/config
+      - /home/jerry/media/movies:/movies
+      - /home/jerry/media/tv:/tv
+    ports:
+      - "6767:6767"
+    restart: unless-stopped
+    networks: [arr-net]
+
+  lidarr:
+    image: lscr.io/linuxserver/lidarr:latest
+    container_name: lidarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Toronto
+    volumes:
+      - /home/jerry/media/config/lidarr:/config
+      - /home/jerry/media/music:/music
+      - /home/jerry/media/downloads:/downloads
+    ports:
+      - "8686:8686"
+    restart: unless-stopped
+    networks: [arr-net]
+
+  # Readarr doesnt exist
+  lazylibrarian:
+    image: lscr.io/linuxserver/lazylibrarian:latest
+    container_name: lazylibrarian
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Toronto
+      - DOCKER_MODS=linuxserver/mods:universal-calibre|linuxserver/mods:lazylibrarian-ffmpeg
+    volumes:
+      - /home/jerry/media/config/lazylibrarian:/config
+      - /home/jerry/media/books:/books
+      - /home/jerry/media/downloads:/downloads
+    ports:
+      - "5299:5299"
+    networks: [arr-net]
+
+  tdarr:
+    image: ghcr.io/haveagitgat/tdarr:latest
+    container_name: tdarr
+    environment:
+      - TZ=America/Toronto
+      - PUID=1000
+      - PGID=1000
+      - UMASK_SET=002
+      - serverIP=0.0.0.0
+      - serverPort=8266
+      - webUIPort=8265
+    volumes:
+      - /home/jerry/media/config/tdarr/server:/app/server
+      - /home/jerry/media/config/tdarr/configs:/app/configs
+      - /home/jerry/media/config/tdarr/logs:/app/logs
+      - /home/jerry/media/movies:/media/movies
+      - /home/jerry/media/tv:/media/tv
+      - /home/jerry/media/music:/media/music
+    ports:
+      - "8265:8265"   # Web UI
+      - "8266:8266"   # Server
+    restart: unless-stopped
+    networks: [arr-net]
+
+  tdarr-node:
+    image: ghcr.io/haveagitgat/tdarr_node:latest
+    container_name: tdarr-node
+    environment:
+      - TZ=America/Toronto
+      - PUID=1000
+      - PGID=1000
+      - UMASK_SET=002
+      - nodeID=main-node
+      - serverIP=tdarr
+      - serverPort=8266
+    volumes:
+      - /home/jerry/media/config/tdarr/configs:/app/configs
+      - /home/jerry/media/config/tdarr/logs:/app/logs
+      - /home/jerry/media/movies:/media/movies
+      - /home/jerry/media/tv:/media/tv
+      - /home/jerry/media/music:/media/music
+    depends_on:
+      - tdarr
+    restart: unless-stopped
+    networks: [arr-net]
+
+  # Additions
+  jellyfin:
+    image: lscr.io/linuxserver/jellyfin:latest
+    container_name: jellyfin
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Toronto
+    volumes:
+      - /home/jerry/media/config/jellyfin:/config
+      - /home/jerry/media/movies:/data/movies
+      - /home/jerry/media/tv:/data/tv
+      - /home/jerry/media/music:/data/music
+    ports:
+      - "8096:8096"
+    restart: unless-stopped
+    networks: [arr-net]
+networks:
+  arr_net:
+    external: true

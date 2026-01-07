@@ -1,0 +1,23 @@
+# sudo podman compose -f caddy-compose.yml up -d --force-recreate
+services: 
+  caddy:
+    image: docker.io/caddy:latest
+    container_name: caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - TZ=America/Toronto
+    volumes:
+      - /home/jerry/infra/config/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - /home/jerry/infra/data/caddy/data:/data
+      - /home/jerry/infra/data/caddy/config:/config
+    restart: unless-stopped
+    networks:
+      - infra_net
+      - arr_net
+networks:
+  infra_net:
+    external: true
+  arr_net:
+    external: true

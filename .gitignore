@@ -1,0 +1,4 @@
+.env
+.old-env
+amol-podmancompose.yml
+services.txt

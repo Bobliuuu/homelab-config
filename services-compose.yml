@@ -1,0 +1,286 @@
+services:
+  # Alerting and reporting
+  prometheus:
+    image: docker.io/prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - /home/jerry/infra/config/prometheus:/etc/prometheus
+      - /home/jerry/infra/data/prometheus:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+    ports:
+      - "7003:9090"
+    restart: unless-stopped
+    networks: [infra_net]
+
+  grafana:
+    image: docker.io/grafana/grafana-oss:latest
+    container_name: grafana
+    environment:
+      - TZ=America/Toronto
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+    volumes:
+      - /home/jerry/infra/data/grafana:/var/lib/grafana
+    ports:
+      - "7004:3000"
+    restart: unless-stopped
+    networks: [infra_net]
+
+  gitea-db:
+    image: docker.io/postgres:16
+    container_name: gitea-db
+    environment:
+      - POSTGRES_DB=gitea
+      - POSTGRES_USER=gitea
+      - POSTGRES_PASSWORD=${GITEA_DB_PASSWORD}
+    volumes:
+      - /home/jerry/infra/data/gitea/postgres:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks: [infra_net]
+
+  gitea:
+    image: docker.io/gitea/gitea:latest
+    container_name: gitea
+    depends_on:
+      - gitea-db
+    environment:
+      - TZ=America/Toronto
+      - USER_UID=1000
+      - USER_GID=1000
+      - GITEA__database__DB_TYPE=postgres
+      - GITEA__database__HOST=gitea-db:5432
+      - GITEA__database__NAME=gitea
+      - GITEA__database__USER=gitea
+      - GITEA__database__PASSWD=${GITEA_DB_PASSWORD}
+    volumes:
+      - /home/jerry/infra/data/gitea:/data
+    ports:
+      - "7005:3000"
+      - "2222:22"
+    restart: unless-stopped
+    networks: [infra_net]
+
+  outline:
+    image: docker.getoutline.com/outlinewiki/outline:latest
+    container_name: outline
+    restart: unless-stopped
+    expose:
+      - "7006"
+    volumes:
+      - outline-storage:/var/lib/outline/data
+    depends_on:
+      - outline-postgres
+      - outline-redis
+    networks: [infra_net]
+
+  outline-redis:
+    image: redis:7-alpine
+    container_name: outline-redis
+    restart: unless-stopped
+    command: ["redis-server", "/redis.conf"]
+    expose:
+      - "7007"
+    volumes:
+      - ./redis.conf:/redis.conf:ro
+      - outline-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [infra_net]
+
+  outline-postgres:
+    image: postgres:16
+    container_name: outline-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: outline
+      POSTGRES_PASSWORD: ${OUTLINE_DB_PASSWORD}
+      POSTGRES_DB: outline
+    expose:
+      - "7008"
+    volumes:
+      - outline-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U outline -d outline"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [infra_net]
+
+  node-exporter:
+    image: docker.io/prom/node-exporter:latest
+    container_name: node-exporter
+    pid: "host"
+    command:
+      - "--path.rootfs=/host"
+    volumes:
+      - "/:/host:ro,rslave"
+    ports:
+      - "7009:9100"
+    restart: unless-stopped
+    networks: [infra_net]
+
+  paperless-db:
+    image: docker.io/postgres:16
+    container_name: paperless-db
+    environment:
+      - POSTGRES_DB=paperless
+      - POSTGRES_USER=paperless
+      - POSTGRES_PASSWORD=${PAPERLESS_DB_PASSWORD}
+    volumes:
+      - /home/jerry/infra/data/paperless/postgres:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks: [infra_net]
+
+  paperless-redis:
+    image: docker.io/redis:7-alpine
+    container_name: paperless-redis
+    restart: unless-stopped
+    networks: [infra_net]
+
+  paperless:
+    image: docker.io/ghcr.io/paperless-ngx/paperless-ngx:latest
+    container_name: paperless
+    depends_on:
+      - paperless-db
+      - paperless-redis
+    environment:
+      - TZ=America/Toronto
+      - PAPERLESS_REDIS=redis://paperless-redis:6379
+      - PAPERLESS_DBHOST=paperless-db
+      - PAPERLESS_DBNAME=paperless
+      - PAPERLESS_DBUSER=paperless
+      - PAPERLESS_DBPASS=${PAPERLESS_DB_PASSWORD}
+      - PAPERLESS_SECRET_KEY=${PAPERLESS_SECRET_KEY}
+      - PAPERLESS_URL=${PAPERLESS_URL}   # e.g. http://10.0.0.50:8000
+      # Optional: create admin on first boot
+      - PAPERLESS_ADMIN_USER=${PAPERLESS_ADMIN_USER}
+      - PAPERLESS_ADMIN_PASSWORD=${PAPERLESS_ADMIN_PASSWORD}
+      - PAPERLESS_ADMIN_MAIL=${PAPERLESS_ADMIN_MAIL}
+    volumes:
+      - /home/jerry/infra/data/paperless/data:/usr/src/paperless/data
+      - /home/jerry/infra/data/paperless/media:/usr/src/paperless/media
+      - /home/jerry/infra/data/paperless/export:/usr/src/paperless/export
+      - /home/jerry/infra/data/paperless/consume:/usr/src/paperless/consume
+    ports:
+      - "7010:8000"
+    restart: unless-stopped
+    networks: [infra_net]
+  
+  vaultwarden:
+    image: docker.io/vaultwarden/server:latest
+    container_name: vaultwarden
+    environment:
+      - TZ=America/Toronto
+      - DOMAIN=${VAULTWARDEN_DOMAIN}          # e.g. https://vault.example.com
+      - ADMIN_TOKEN=${VAULTWARDEN_ADMIN_TOKEN}
+      - SIGNUPS_ALLOWED=false
+    volumes:
+      - /home/jerry/infra/data/vaultwarden:/data
+    ports:
+      - "7011:80"
+    restart: unless-stopped
+    networks: [infra_net]
+
+  synapse-db:
+    image: docker.io/postgres:16
+    container_name: synapse-db
+    environment:
+      - POSTGRES_DB=synapse
+      - POSTGRES_USER=synapse
+      - POSTGRES_PASSWORD=${SYNAPSE_DB_PASSWORD}
+    volumes:
+      - /home/jerry/infra/data/synapse/postgres:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks: [infra_net]
+
+  synapse:
+    image: docker.io/matrixdotorg/synapse:latest
+    container_name: synapse
+    depends_on:
+      - synapse-db
+    environment:
+      - TZ=America/Toronto
+      - SYNAPSE_SERVER_NAME=${SYNAPSE_SERVER_NAME}     # e.g. matrix.example.com
+      - SYNAPSE_REPORT_STATS=no
+    volumes:
+      - /home/jerry/infra/data/synapse:/data
+    ports:
+      - "7012:8008"   # client/server (usually behind reverse proxy)
+    restart: unless-stopped
+    networks: [infra_net]
+
+  element:
+    image: docker.io/vectorim/element-web:latest
+    container_name: element
+    volumes:
+      - /home/jerry/infra/config/element/config.json:/app/config.json:ro
+    ports:
+      - "7012:80"
+    restart: unless-stopped
+    networks: [infra_net]
+
+  portainer:
+    image: docker.io/portainer/portainer-ce:latest
+    container_name: portainer
+    volumes:
+      - /run/podman/podman.sock:/var/run/docker.sock
+      - /home/jerry/infra/data/portainer:/data
+    ports:
+      - "7013:9000"
+    restart: unless-stopped
+    networks: [infra_net]
+
+  immich-db:
+    image: docker.io/postgres:16
+    container_name: immich-db
+    environment:
+      - POSTGRES_DB=immich
+      - POSTGRES_USER=immich
+      - POSTGRES_PASSWORD=${IMMICH_DB_PASSWORD}
+    volumes:
+      - /home/jerry/infra/data/immich/postgres:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks: [infra_net]
+
+  immich-redis:
+    image: docker.io/redis:7-alpine
+    container_name: immich-redis
+    restart: unless-stopped
+    networks: [infra_net]
+
+  immich-server:
+    image: ghcr.io/immich-app/immich-server:release
+    container_name: immich-server
+    depends_on:
+      - immich-db
+      - immich-redis
+    environment:
+      - TZ=America/Toronto
+      - DB_HOSTNAME=immich-db
+      - DB_USERNAME=immich
+      - DB_PASSWORD=${IMMICH_DB_PASSWORD}
+      - DB_DATABASE_NAME=immich
+      - REDIS_HOSTNAME=immich-redis
+    volumes:
+      - /home/jerry/infra/data/immich/upload:/usr/src/app/upload
+      - /etc/localtime:/etc/localtime:ro
+    ports:
+      - "7014:2283"
+    restart: unless-stopped
+    networks: [infra_net]
+
+  immich-machine-learning:
+    image: ghcr.io/immich-app/immich-machine-learning:release
+    container_name: immich-ml
+    volumes:
+      - /home/jerry/infra/data/immich/ml-cache:/cache
+    restart: unless-stopped
+    networks: [infra_net]
+
+networks:
+  infra_net:
+    external: true

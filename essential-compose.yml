@@ -1,0 +1,45 @@
+services:
+  uptime-kuma:
+    image: docker.io/louislam/uptime-kuma:latest
+    container_name: uptime-kuma
+    volumes:
+      - /home/jerry/uptime-kuma:/app/data
+    ports:
+      - "7000:3001"
+    restart: unless-stopped
+    networks: [infra_net]
+  code-server:
+    container_name: code-server
+    image: lscr.io/linuxserver/code-server:latest
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Toronto
+      # Option A: password auth
+      - PASSWORD=${CODE_SERVER_PASSWORD}
+      # Option B: disable auth (not recommended)
+      # - AUTH=none
+    volumes:
+      - /home/jerry/config/code-server:/config
+      - /home/jerry/projects:/config/workspace
+    ports:
+      - "7001:8443"
+    restart: unless-stopped
+    networks: [infra_net]
+  homepage:
+    image: ghcr.io/gethomepage/homepage:latest
+    container_name: homepage
+    ports:
+      - "7002:3000"
+    volumes:
+      - /home/jerry/config:/app/config
+      - /run/podman/podman.sock:/var/run/docker.sock:ro
+    environment:
+      TZ: America/Toronto
+      environment:
+      HOMEPAGE_ALLOWED_HOSTS: home.lab.jerryzhu.org,10.0.0.50:7002
+    restart: unless-stopped
+    networks: [infra_net]
+networks:
+  infra_net:
+    external: true

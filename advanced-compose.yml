@@ -1,0 +1,137 @@
+version: "3.9"
+
+name: homelab-advanced
+
+networks:
+  edge:
+  internal:
+
+volumes:
+  traefik_letsencrypt:
+  nextcloud_html:
+  nextcloud_data:
+  nextcloud_db:
+  nextcloud_redis:
+
+services:
+  # Reverse proxy (nice on Proxmox: one entrypoint, many services)
+  traefik:
+    image: traefik:v3.1
+    container_name: traefik
+    restart: unless-stopped
+    networks: [edge, internal]
+    ports:
+      - "80:80"
+      - "443:443"
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      # ACME (Let's Encrypt)
+      - --certificatesresolvers.le.acme.httpchallenge=true
+      - --certificatesresolvers.le.acme.httpchallenge.entrypoint=web
+      - --certificatesresolvers.le.acme.email=you@example.com
+      - --certificatesresolvers.le.acme.storage=/letsencrypt/acme.json
+    volumes:
+      - traefik_letsencrypt:/letsencrypt:Z
+      # Podman Compose uses a Docker-compatible socket if you expose it.
+      # Rootless Podman socket is often at:
+      #  $XDG_RUNTIME_DIR/podman/podman.sock
+      # If you don't want socket exposure, skip Traefik and use Caddy/Nginx static config.
+      - ${XDG_RUNTIME_DIR:-/run/user/1000}/podman/podman.sock:/var/run/docker.sock:Z
+
+  # Nextcloud DB
+  nextcloud-db:
+    image: postgres:16
+    container_name: nextcloud-db
+    restart: unless-stopped
+    networks: [internal]
+    environment:
+      - POSTGRES_DB=nextcloud
+      - POSTGRES_USER=nextcloud
+      - POSTGRES_PASSWORD=nc_change_me
+    volumes:
+      - nextcloud_db:/var/lib/postgresql/data:Z
+
+  # Nextcloud Redis
+  nextcloud-redis:
+    image: redis:7
+    container_name: nextcloud-redis
+    restart: unless-stopped
+    networks: [internal]
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - nextcloud_redis:/data:Z
+
+  # Nextcloud
+  nextcloud:
+    image: nextcloud:29-apache
+    container_name: nextcloud
+    restart: unless-stopped
+    networks: [internal, edge]
+    depends_on:
+      - nextcloud-db
+      - nextcloud-redis
+    environment:
+      - POSTGRES_HOST=nextcloud-db
+      - POSTGRES_DB=nextcloud
+      - POSTGRES_USER=nextcloud
+      - POSTGRES_PASSWORD=nc_change_me
+      - REDIS_HOST=nextcloud-redis
+      # Recommended if you’ll be behind Traefik:
+      - TRUSTED_PROXIES=traefik
+      # You will still set trusted domains in Nextcloud config after first boot.
+    volumes:
+      - nextcloud_html:/var/www/html:Z
+      - nextcloud_data:/var/www/html/data:Z
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.nextcloud.rule=Host(`nextcloud.local`)
+      - traefik.http.routers.nextcloud.entrypoints=websecure
+      - traefik.http.routers.nextcloud.tls.certresolver=le
+      - traefik.http.services.nextcloud.loadbalancer.server.port=80
+
+  # --- CloudStack note ---
+  # CloudStack is typically deployed as:
+  # - a Management Server VM
+  # - a database (MySQL/MariaDB)
+  # - secondary storage (NFS)
+  # - KVM hypervisor hosts (which could be VMs on Proxmox nested virt, but not ideal)
+  #
+  # If you *really* want a container stub for the mgmt server UI/API (not recommended for prod):
+  cloudstack-mgmt:
+    image: apache/cloudstack:latest
+    container_name: cloudstack-mgmt
+    restart: unless-stopped
+    networks: [internal, edge]
+    # CloudStack mgmt usually needs DB + system templates + storage plumbing.
+    # Treat this as a placeholder only.
+    environment:
+      - CLOUDSTACK_DB_HOST=cloudstack-db
+      - CLOUDSTACK_DB_USER=cloudstack
+      - CLOUDSTACK_DB_PASSWORD=cs_change_me
+      - CLOUDSTACK_DB_NAME=cloudstack
+    depends_on:
+      - cloudstack-db
+    ports:
+      - "8080:8080"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.cloudstack.rule=Host(`cloudstack.local`)
+      - traefik.http.routers.cloudstack.entrypoints=websecure
+      - traefik.http.routers.cloudstack.tls.certresolver=le
+      - traefik.http.services.cloudstack.loadbalancer.server.port=8080
+
+  cloudstack-db:
+    image: mariadb:11
+    container_name: cloudstack-db
+    restart: unless-stopped
+    networks: [internal]
+    environment:
+      - MARIADB_ROOT_PASSWORD=root_change_me
+      - MARIADB_DATABASE=cloudstack
+      - MARIADB_USER=cloudstack
+      - MARIADB_PASSWORD=cs_change_me
+    volumes:
+      - ./cloudstack-db:/var/lib/mysql:Z
