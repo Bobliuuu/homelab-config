@@ -18,6 +18,7 @@ services:
       # Option A: password auth
       - PASSWORD=${CODE_SERVER_PASSWORD}
       # Option B: disable auth (not recommended)
+      - CERT=false
       # - AUTH=none
     volumes:
       - /home/jerry/config/code-server:/config
@@ -25,7 +26,9 @@ services:
     ports:
       - "7001:8443"
     restart: unless-stopped
-    networks: [infra_net]
+    networks:
+      infra_net:
+        ipv4_address: 10.89.0.21
   homepage:
     image: ghcr.io/gethomepage/homepage:latest
     container_name: homepage
@@ -35,11 +38,15 @@ services:
       - /home/jerry/config:/app/config
       - /run/podman/podman.sock:/var/run/docker.sock:ro
     environment:
-      TZ: America/Toronto
-      environment:
-      HOMEPAGE_ALLOWED_HOSTS: home.lab.jerryzhu.org,10.0.0.50:7002
+      - TZ=America/Toronto
+      - HOMEPAGE_ALLOWED_HOSTS=home.lab.jerryzhu.org,10.0.0.50:7002
     restart: unless-stopped
-    networks: [infra_net]
+    networks:
+      infra_net:
+        ipv4_address: 10.89.0.22
 networks:
   infra_net:
     external: true
+    ipam:
+      config:
+        - subnet: 10.89.0.0/24

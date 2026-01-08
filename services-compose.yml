@@ -52,9 +52,11 @@ services:
     container_name: outline
     restart: unless-stopped
     environment:
+      - URL=http://10.0.0.50:7006
+      - FORCE_HTTPS=0
+      - TRUST_PROXY=1
       - DATABASE_URL=postgres://${POSTGRES_USER_OUTLINE}:${POSTGRES_PASSWORD_OUTLINE}@${POSTGRES_HOST}:${POSTGRES_PORT}/outline
       - REDIS_URL=redis://:${REDIS_PASSWORD}@${REDIS_HOST}:${REDIS_PORT}
-      - URL=${OUTLINE_URL}
       - SECRET_KEY=${OUTLINE_SECRET_KEY}
       - UTILS_SECRET=${OUTLINE_UTILS_SECRET}
     volumes:
@@ -83,12 +85,12 @@ services:
     environment:
       - TZ=America/Toronto
       - PAPERLESS_DBENGINE=postgresql
-      - PAPERLESS_DBHOST=${POSTGRES_HOST}      # e.g. 10.0.0.50
-      - PAPERLESS_DBPORT=${POSTGRES_PORT}      # 5432
+      - PAPERLESS_DBHOST=${POSTGRES_HOST}
+      - PAPERLESS_DBPORT=${POSTGRES_PORT}
       - PAPERLESS_DBNAME=paperless
       - PAPERLESS_DBUSER=${POSTGRES_USER}
       - PAPERLESS_DBPASS=${POSTGRES_PASSWORD1}
-      - PAPERLESS_REDIS=redis://${REDIS_HOST}:${REDIS_PORT}   # e.g. 10.0.0.50:6379
+      - PAPERLESS_REDIS=redis://:${REDIS_PASSWORD}@${REDIS_HOST}:${REDIS_PORT}
       - PAPERLESS_SECRET_KEY=${PAPERLESS_SECRET_KEY}
       - PAPERLESS_URL=${PAPERLESS_URL}
       - PAPERLESS_ADMIN_USER=${PAPERLESS_ADMIN_USER}
@@ -108,7 +110,7 @@ services:
     container_name: vaultwarden
     environment:
       - TZ=America/Toronto
-      - DOMAIN=${VAULTWARDEN_DOMAIN}          # e.g. https://vault.example.com
+      - DOMAIN=${VAULTWARDEN_DOMAIN} 
       - ADMIN_TOKEN=${VAULTWARDEN_ADMIN_TOKEN}
       - SIGNUPS_ALLOWED=false
     volumes:
@@ -121,24 +123,27 @@ services:
   synapse:
     image: docker.io/matrixdotorg/synapse:latest
     container_name: synapse
-    environment:
-      - TZ=America/Toronto
-      - SYNAPSE_SERVER_NAME=${SYNAPSE_SERVER_NAME}     # e.g. matrix.example.com
-      - SYNAPSE_REPORT_STATS=no
+    restart: unless-stopped
     volumes:
       - /home/jerry/infra/data/synapse:/data
+    environment:
+      - TZ=America/Toronto
+      - SYNAPSE_SERVER_NAME=${SYNAPSE_SERVER_NAME}
+      - SYNAPSE_REPORT_STATS=no
+    command: ["run", "-c", "/data/homeserver.yaml"]
     ports:
-      - "7010:8008"   # client/server (usually behind reverse proxy)
-    restart: unless-stopped
+      - "7010:8008"
     networks: [infra_net]
 
   element:
     image: docker.io/vectorim/element-web:latest
     container_name: element
+    environment:
+      - NGINX_PORT=8080
     volumes:
       - /home/jerry/infra/config/element/config.json:/app/config.json:ro
     ports:
-      - "7011:80"
+      - "7011:8080"
     restart: unless-stopped
     networks: [infra_net]
 
