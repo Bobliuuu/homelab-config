@@ -11,7 +11,9 @@ services:
     ports:
       - "7003:9090"
     restart: unless-stopped
-    networks: [infra_net]
+    networks:
+      infra_net:
+        ipv4_address: 10.89.0.23
 
   grafana:
     image: docker.io/grafana/grafana-oss:latest
@@ -25,7 +27,9 @@ services:
     ports:
       - "7004:3000"
     restart: unless-stopped
-    networks: [infra_net]
+    networks:
+      infra_net:
+        ipv4_address: 10.89.0.24
 
   gitea:
     image: docker.io/gitea/gitea:latest
@@ -45,8 +49,10 @@ services:
       - "7005:3000"
       - "2222:22"
     restart: unless-stopped
-    networks: [infra_net]
-    
+    networks:
+      infra_net:
+        ipv4_address: 10.89.0.25
+
   outline:
     image: docker.io/outlinewiki/outline:latest
     container_name: outline
@@ -63,8 +69,10 @@ services:
       - outline-storage:/var/lib/outline/data
     ports:
       - "7006:3000"
-    networks: [infra_net]
-    
+    networks:
+      infra_net:
+        ipv4_address: 10.89.0.26
+
   node-exporter:
     image: docker.io/prom/node-exporter:latest
     container_name: node-exporter
@@ -76,7 +84,9 @@ services:
     ports:
       - "7007:9100"
     restart: unless-stopped
-    networks: [infra_net]
+    networks:
+      infra_net:
+        ipv4_address: 10.89.0.27
 
   paperless:
     image: ghcr.io/paperless-ngx/paperless-ngx:latest
@@ -103,14 +113,16 @@ services:
       - /home/jerry/infra/data/paperless/consume:/usr/src/paperless/consume
     ports:
       - "7008:8000"
-    networks: [infra_net]
-  
+    networks:
+      infra_net:
+        ipv4_address: 10.89.0.28
+
   vaultwarden:
     image: docker.io/vaultwarden/server:latest
     container_name: vaultwarden
     environment:
       - TZ=America/Toronto
-      - DOMAIN=${VAULTWARDEN_DOMAIN} 
+      - DOMAIN=${VAULTWARDEN_DOMAIN}
       - ADMIN_TOKEN=${VAULTWARDEN_ADMIN_TOKEN}
       - SIGNUPS_ALLOWED=false
     volumes:
@@ -118,7 +130,9 @@ services:
     ports:
       - "7009:80"
     restart: unless-stopped
-    networks: [infra_net]
+    networks:
+      infra_net:
+        ipv4_address: 10.89.0.29
 
   synapse:
     image: docker.io/matrixdotorg/synapse:latest
@@ -133,7 +147,9 @@ services:
     command: ["run", "-c", "/data/homeserver.yaml"]
     ports:
       - "7010:8008"
-    networks: [infra_net]
+    networks:
+      infra_net:
+        ipv4_address: 10.89.0.30
 
   element:
     image: docker.io/vectorim/element-web:latest
@@ -145,7 +161,9 @@ services:
     ports:
       - "7011:8080"
     restart: unless-stopped
-    networks: [infra_net]
+    networks:
+      infra_net:
+        ipv4_address: 10.89.0.31
 
   portainer:
     image: docker.io/portainer/portainer-ce:latest
@@ -156,7 +174,9 @@ services:
     ports:
       - "7012:9000"
     restart: unless-stopped
-    networks: [infra_net]
+    networks:
+      infra_net:
+        ipv4_address: 10.89.0.32
 
   immich-server:
     image: ghcr.io/immich-app/immich-server:release
@@ -177,7 +197,9 @@ services:
       - /etc/localtime:/etc/localtime:ro
     ports:
       - "7013:2283"
-    networks: [infra_net]
+    networks:
+      infra_net:
+        ipv4_address: 10.89.0.33
 
   immich-machine-learning:
     image: ghcr.io/immich-app/immich-machine-learning:release
@@ -185,10 +207,16 @@ services:
     volumes:
       - /home/jerry/infra/data/immich/ml-cache:/cache
     restart: unless-stopped
-    networks: [infra_net]
+    networks:
+      infra_net:
+        ipv4_address: 10.89.0.34
 
 networks:
   infra_net:
     external: true
+    ipam:
+      config:
+        - subnet: 10.89.0.0/24
+
 volumes:
   outline-storage:
