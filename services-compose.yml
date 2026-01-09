@@ -58,6 +58,8 @@ services:
     container_name: outline
     restart: unless-stopped
     environment:
+      - BIND_ADDRESS=0.0.0.0
+      - PORT=3000
       - URL=http://10.0.0.50:7006
       - FORCE_HTTPS=0
       - TRUST_PROXY=1
@@ -124,7 +126,7 @@ services:
       - TZ=America/Toronto
       - DOMAIN=${VAULTWARDEN_DOMAIN}
       - ADMIN_TOKEN=${VAULTWARDEN_ADMIN_TOKEN}
-      - SIGNUPS_ALLOWED=false
+      - SIGNUPS_ALLOWED=true
     volumes:
       - /home/jerry/infra/data/vaultwarden:/data
     ports:
@@ -134,36 +136,36 @@ services:
       infra_net:
         ipv4_address: 10.89.0.29
 
-  synapse:
-    image: docker.io/matrixdotorg/synapse:latest
-    container_name: synapse
-    restart: unless-stopped
-    volumes:
-      - /home/jerry/infra/data/synapse:/data
-    environment:
-      - TZ=America/Toronto
-      - SYNAPSE_SERVER_NAME=${SYNAPSE_SERVER_NAME}
-      - SYNAPSE_REPORT_STATS=no
-    command: ["run", "-c", "/data/homeserver.yaml"]
-    ports:
-      - "7010:8008"
-    networks:
-      infra_net:
-        ipv4_address: 10.89.0.30
-
-  element:
-    image: docker.io/vectorim/element-web:latest
-    container_name: element
-    environment:
-      - NGINX_PORT=8080
-    volumes:
-      - /home/jerry/infra/config/element/config.json:/app/config.json:ro
-    ports:
-      - "7011:8080"
-    restart: unless-stopped
-    networks:
-      infra_net:
-        ipv4_address: 10.89.0.31
+#  synapse:
+#    image: docker.io/matrixdotorg/synapse:latest
+#    container_name: synapse
+#    restart: unless-stopped
+#    volumes:
+#      - /home/jerry/infra/data/synapse:/data
+#    environment:
+#      - TZ=America/Toronto
+#      - SYNAPSE_SERVER_NAME=${SYNAPSE_SERVER_NAME}
+#      - SYNAPSE_REPORT_STATS=no
+#    command: ["run", "-c", "/data/homeserver.yaml"]
+#    ports:
+#      - "7010:8008"
+#    networks:
+#      infra_net:
+#        ipv4_address: 10.89.0.30
+#
+#  element:
+#    image: docker.io/vectorim/element-web:latest
+#    container_name: element
+#    environment:
+#      - NGINX_PORT=8080
+#    volumes:
+#      - /home/jerry/infra/config/element/config.json:/app/config.json:ro
+#    ports:
+#      - "7011:8080"
+#    restart: unless-stopped
+#    networks:
+#      infra_net:
+#        ipv4_address: 10.89.0.31
 
   portainer:
     image: docker.io/portainer/portainer-ce:latest
@@ -192,6 +194,7 @@ services:
       - REDIS_HOSTNAME=${REDIS_HOST}
       - REDIS_PORT=${REDIS_PORT}
       - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - DB_VECTOR_EXTENSION=pgvector
     volumes:
       - /home/jerry/infra/data/immich/upload:/usr/src/app/upload
       - /etc/localtime:/etc/localtime:ro
