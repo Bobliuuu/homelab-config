@@ -1,0 +1,184 @@
+########################################
+# Global options
+########################################
+{
+  email help@jerryzhu.org
+  auto_https disable_redirects
+}
+
+(proxy_http) {
+  reverse_proxy {args[0]} {
+    transport http {
+      versions 1.1
+    }
+  }
+}
+
+(proxy_https_insecure) {
+  reverse_proxy {args[0]} {
+    transport http {
+      versions 1.1
+      tls_insecure_skip_verify
+    }
+  }
+}
+
+########################################
+# Trusted-only snippet
+# Allows:
+# - LAN (10.0.0.0/24)
+# - Tailscale (100.64.0.0/10)
+# - Localhost
+########################################
+(trusted_only) {
+  @trusted {
+    remote_ip 10.0.0.0/24 100.64.0.0/10 127.0.0.1 ::1
+  }
+
+  handle @trusted {
+    reverse_proxy {args[0]}
+  }
+
+  handle {
+    respond "Forbidden" 403
+  }
+}
+
+########################################
+# TRUSTED ONLY WITH INSECURE HTTPS TLS
+########################################
+(trusted_only_https_insecure) {
+  @trusted {
+    remote_ip 10.0.0.0/24 100.64.0.0/10 127.0.0.1 ::1
+  }
+
+  handle @trusted {
+    reverse_proxy {args[0]} {
+      transport http {
+        tls_insecure_skip_verify
+      }
+    }
+  }
+
+  handle {
+    respond "Forbidden" 403
+  }
+}
+
+########################################
+# PROXY LAN
+########################################
+(proxy_lan) {
+  reverse_proxy {args[0]} {
+    transport http {
+      versions 1.1
+    }
+  }
+}
+
+#(lab_tls) {
+#  tls {
+#    dns cloudflare {env.CF_API_TOKEN}
+#  }
+#}
+
+########################################
+# PUBLIC SERVICES
+########################################
+
+# --- Test page (PUBLIC) ---
+test.app.jerryzhu.org {
+  respond "Caddy is working ✅" 200
+}
+
+# --- Uptime Kuma Status (PUBLIC) ---
+status.app.jerryzhu.org {
+
+  @root path /
+  rewrite @root /status/services
+
+  @ok {
+    # Status page + assets
+    path / /status/services* /assets/* /favicon.ico /icon.svg /manifest.json /apple-touch-icon.png
+
+    # APIs used by the status page SPA
+    path /api/entry-page /api/status-page* /api/push* /api/metrics
+
+    # Live updates
+    path /socket.io*
+  }
+
+  handle @ok {
+    reverse_proxy 10.89.0.20:3001
+  }
+
+  respond 404
+}
+
+
+########################################
+# INTERNAL LAB SERVICES (PRIVATE)
+########################################
+
+# --- Syncthing ---
+sync.lab.jerryzhu.org {
+  reverse_proxy http://10.0.0.50:8384
+}
+
+# --- Pi-hole (disabled) ---
+#pihole.lab.jerryzhu.org:80 {
+#  import proxy_lan http://10.0.0.50:8090
+#}
+
+# --- Uptime Kuma Dash ---
+http://uptime.lab.jerryzhu.org {
+  log {
+    output stdout
+    format console
+  }
+  reverse_proxy 10.89.0.20:3001
+}
+
+# --- Code Server ---
+http://code.lab.jerryzhu.org {
+  reverse_proxy 10.89.0.21:8443
+}
+
+# --- Dashboard ---
+http://home.lab.jerryzhu.org {
+  reverse_proxy 10.89.0.22:3000
+}
+
+# --- Authentik ---
+http://auth.lab.jerryzhu.org {
+  reverse_proxy 10.89.0.19:9000
+}
+
+# --- Prometheus ---
+http://prometheus.lab.jerryzhu.org {
+  reverse_proxy 10.89.0.23:9090
+}
+
+# --- Grafana ---
+http://grafana.lab.jerryzhu.org:80 {
+  reverse_proxy 10.89.0.24:3000
+}
+
+# --- Gitea ---
+http://gitea.lab.jerryzhu.org {
+  reverse_proxy 10.89.0.25:3000 
+}
+
+# --- Outline ---
+http://outline.lab.jerryzhu.org {
+  reverse_proxy 10.89.0.26:3000
+}
+
+bobliuhp.tail2237b1.ts.net {
+  handle_path /vault* {
+    reverse_proxy vaultwarden:80
+  }
+
+  # optional default:
+  respond "ok" 200
+}
